@@ -58,8 +58,23 @@ const options  = all.filter(x => x.type === "option");
  * the LLM branch, not because we couldn't afford the optimal search.
  */
 function pickCheapestFeasible(req, options) {
-  // TODO [hard] — LO-2: classical search baselines
-  throw new Error("TODO [hard]: implement pickCheapestFeasible()");
+  const feasible = options.filter(option => {
+    const matchesRegion = option.origin_region === req.origin_region && option.destination_region === req.dest_region;
+    const meetsDeadline = Number(option.transit_days) <= Number(req.deadline_days);
+    const meetsWeight = Number(option.max_weight_kg) >= Number(req.weight_kg);
+    const perishableOk = req.perishable !== true || option.supports_perishable === true || option.supports_perishable === "true";
+    return matchesRegion && meetsDeadline && meetsWeight && perishableOk;
+  });
+
+  if (feasible.length === 0) return null;
+
+  return feasible.reduce((best, option) => {
+    const totalCostUsd = Number(req.weight_kg) * Number(option.cost_per_kg);
+    if (!best || totalCostUsd < best.total_cost_usd) {
+      return { ...option, total_cost_usd: totalCostUsd };
+    }
+    return best;
+  }, null);
 }
 
 // ---- Main loop (provided) -------------------------------------------------

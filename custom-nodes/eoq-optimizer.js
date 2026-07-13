@@ -66,8 +66,8 @@ function annualDemand(salesForSku) {
  *       and dividing by zero holding cost is meaningless.)
  */
 function eoq(D, S, H) {
-  // TODO [medium] — LO-2: classical optimization
-  throw new Error("TODO [medium]: implement eoq()");
+  if (D <= 0 || H <= 0 || S <= 0) return 0;
+  return Math.round(Math.sqrt((2 * D * S) / H));
 }
 
 // ---- TODO #2 — assumption-violation detection -----------------------------
@@ -101,8 +101,41 @@ function eoq(D, S, H) {
  *       trigger multiple flags — that's expected and useful downstream.
  */
 function detectViolations(inv, salesSeries) {
-  // TODO [hard] — LO-4: knowing when classical models fail
-  throw new Error("TODO [hard]: implement detectViolations()");
+  const flags = [];
+  if (!Array.isArray(salesSeries) || salesSeries.length === 0) return flags;
+
+  const values = salesSeries.map(r => Number(r.units_sold || 0));
+  const annual = annualDemand(salesSeries);
+
+  const recent = values.slice(-3);
+  const prior = values.slice(0, Math.max(0, values.length - 3));
+  const recentMean = recent.length > 0 ? recent.reduce((a, b) => a + b, 0) / recent.length : 0;
+  const priorMean = prior.length > 0 ? prior.reduce((a, b) => a + b, 0) / prior.length : 0;
+
+  const firstThree = values.slice(0, 3);
+  const firstMean = firstThree.length > 0 ? firstThree.reduce((a, b) => a + b, 0) / firstThree.length : 0;
+  const lastThree = values.slice(-3);
+  const lastMean = lastThree.length > 0 ? lastThree.reduce((a, b) => a + b, 0) / lastThree.length : 0;
+
+  if (priorMean > 0 && recentMean > 2.5 * priorMean) {
+    flags.push("viral_spike");
+  }
+
+  if (firstMean > 0 && lastMean < 0.5 * firstMean) {
+    flags.push("declining");
+  }
+
+  if (annual < 60) {
+    flags.push("low_velocity");
+  }
+
+  const leadTime = Number(inv?.lead_time_days || 0);
+  const volatility = Math.max(...values) - Math.min(...values);
+  if (leadTime > 28 && volatility > 40) {
+    flags.push("long_lead_time");
+  }
+
+  return flags;
 }
 
 // ---- Main loop (provided) -------------------------------------------------
